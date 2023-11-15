@@ -11,7 +11,8 @@ Quill.register("modules/cursors", QuillCursors);
 let provider;
 
 window.addEventListener("load", () => {
-  const ydoc = new Y.Doc();
+  const ydoc = new Y.Doc({ autoLoad: true });
+  globalThis.ydoc = ydoc;
   provider = new WebsocketProvider("ws://localhost:1234", "only-room-id", ydoc);
   provider.on("status", (event) => {
     console.log("status event", event);
@@ -22,60 +23,84 @@ window.addEventListener("load", () => {
   const ymap = ydoc.getMap("transcripts");
   const transcriptsContainer = document.getElementById("transcripts");
 
-  ymap.observe((ymapEvent) => {
-    // ymapEvent.target === ymap; // => true
-
-    // Find out what changed:
-    // Option 1: A set of keys that changed
-    // ymapEvent.keysChanged; // => Set<strings>
-    // // Option 2: Compute the differences
-    // ymapEvent.changes.keys; // => Map<string, { action: 'add'|'update'|'delete', oldValue: any}>
-
-    ymapEvent.changes.keys.forEach((change, key) => {
-      try {
+  ymap.observe((events) => {
+    console.log(events);
+    events.forEach((event) => {
+      event.changes.keys.forEach((change, key) => {
         if (change.action === "add") {
           console.log(
-            `Property "${key}" was added. Initial value: "${ymap.get(key)}".`
+            `Property "${key}" was added. Initial value: `,
+            ymap.get(key)
           );
-
-          const richText = ydoc
-            .getMap("transcripts")
-            .get(`${key}`)
-            .get("richText");
-          if (!richText) {
-            return;
-          }
-          console.log("richText", richText);
-          addBlockEditor(transcriptsContainer, key, richText);
-        } else if (change.action === "update") {
-          console.log(
-            `Property "${key}" was updated. New value: "${ymap.get(
-              key
-            )}". Previous value: "${change.oldValue}".`
-          );
-          const richText = ydoc
-            .getMap("transcripts")
-            .get(`${key}`)
-            .get("richText");
-          if (!richText) {
-            return;
-          }
-          console.log("richText", richText);
-          addBlockEditor(transcriptsContainer, key, richText);
-        } else if (change.action === "delete") {
-          console.log(
-            `Property "${key}" was deleted. New value: undefined. Previous value: "${change.oldValue}".`
-          );
-          removeBlockDocument(transcriptsContainer, key);
+          const transcriptYDoc = ymap.get(`${key}`);
+          transcriptYDoc.on("update", (event) => {
+            console.log({ key, event });
+          });
+          const ytext = transcriptYDoc.getText().toString();
+          console.log({ ytext });
         } else {
-          console.error("Unexpected change action. ", change.action);
+          console.log({ update: event });
         }
-      } catch (e) {
-        console.error(e);
-      }
-      // updateTranscripts(ymap, transcriptsContainer);
+      });
     });
   });
+  // ymap.observe((ymapEvent) => {
+  //   // ymapEvent.target === ymap; // => true
+
+  //   // Find out what changed:
+  //   // Option 1: A set of keys that changed
+  //   // ymapEvent.keysChanged; // => Set<strings>
+  //   // // Option 2: Compute the differences
+  //   // ymapEvent.changes.keys; // => Map<string, { action: 'add'|'update'|'delete', oldValue: any}>
+
+  //   ymapEvent.changes.keys.forEach((change, key) => {
+  //     try {
+  //       if (change.action === "add") {
+  //         console.log(
+  //           `Property "${key}" was added. Initial value: "${ymap.get(key)}".`
+  //         );
+
+  //         const transcriptYDoc = ymap.get(`${key}`);
+  //         // transcriptYDoc.observe((event) => {
+  //         //   console.log(`event for ${key}`, event);
+  //         // });
+  //         transcriptYDoc.autoLoad = true;
+  //         console.log(transcriptYDoc);
+  //         transcriptYDoc.load();
+  //         transcriptYDoc.on("synced", () => {
+  //           console.log("synced ", transcriptYDoc);
+  //           const richText = transcriptYDoc.getText("richText");
+  //           addBlockEditor(transcriptsContainer, key, richText);
+  //         });
+  //       } else if (change.action === "update") {
+  //         console.log(
+  //           `Property "${key}" was updated. New value: "${ymap.get(
+  //             key
+  //           )}". Previous value: "${change.oldValue}".`
+  //         );
+  //         const richText = ydoc
+  //           .getMap("transcripts")
+  //           .get(`${key}`)
+  //           .get("richText");
+  //         if (!richText) {
+  //           return;
+  //         }
+  //         console.log("richText", richText);
+  //         addBlockEditor(transcriptsContainer, key, richText);
+  //       } else if (change.action === "delete") {
+  //         console.log(
+  //           `Property "${key}" was deleted. New value: undefined. Previous value: "${change.oldValue}".`
+  //         );
+  //         removeBlockDocument(transcriptsContainer, key);
+  //       } else {
+  //         console.error("Unexpected change action. ", change.action);
+  //       }
+  //     } catch (e) {
+  //       console.error(e);
+  //     }
+  //     // updateTranscripts(ymap, transcriptsContainer);
+  //   });
+  // });
   /// creates one <p> element for each transcript, and fills it with the transcript text.
   /// then, adds the <p> elements to the container in order of their keys.
   function updateTranscripts(ymap, container) {
